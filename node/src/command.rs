@@ -257,6 +257,13 @@ pub fn run() -> sc_cli::Result<()> {
             let runner = cli.create_runner(&cli.run.normalize())?;
 
             runner.run_node_until_exit(|config| async move {
+                let is_dev_mode = false;
+                if is_dev_mode {
+                    let author_id = Some(chain_spec::get_from_seed::<nimbus_primitives::NimbusId>("Alice"));
+                    return service::new_dev(config, author_id, cli.run.sealing, rpc_config).map_err(Into::into);
+                }
+
+
                 let para_id =
                     chain_spec::Extensions::try_get(&*config.chain_spec).map(|e| e.para_id);
 

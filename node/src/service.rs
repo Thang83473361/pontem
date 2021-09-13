@@ -414,6 +414,21 @@ pub async fn start_node(
     .await
 }
 
+pub fn new_dev(config: Configuration, _author_id: Option<nimbus_primitives::NimbusId>) {
+    use async_io::Timer;
+    use futures::Stream;
+    let sc_service::PartialComponents {
+        client, 
+        backend,
+        mut task_manager,
+        import_queue,
+        keystore_container,
+        select_chain: maybe_select_chain,
+        transaction_pool,
+        other: (maybe_telemetry, maybe_telemetry_handler)
+    } = new_partial(&config, true);
+}
+
 /// Build the import queue for the nimbus runtime.
 pub fn nimbus_build_import_queue(
     client: Arc<TFullClient<Block, RuntimeApi, ParachainRuntimeExecutor>>,
