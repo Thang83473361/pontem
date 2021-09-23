@@ -12,7 +12,8 @@ use pontem_runtime::{
     primitives::{Index, Balance, AccountId},
     RuntimeApi,
 };
-use sc_executor::native_executor_instance;
+use sp_blockchain::HeaderBackend;
+use sc_executor::{NativeExecutionDispatch, native_executor_instance};
 pub use sc_executor::NativeExecutor;
 use sc_service::{Configuration, PartialComponents, Role, TFullBackend, TFullClient, TaskManager};
 use sc_telemetry::{Telemetry, TelemetryHandle, TelemetryWorker, TelemetryWorkerHandle};
@@ -31,6 +32,7 @@ type Header = sp_runtime::generic::Header<BlockNumber, sp_runtime::traits::Blake
 pub type Block = sp_runtime::generic::Block<Header, sp_runtime::OpaqueExtrinsic>;
 type Hash = sp_core::H256;
 type FullBackend = TFullBackend<Block>;
+type FullClient<RuntimeApi, Executor> = TFullClient<Block, RuntimeApi, Executor>;
 type MaybeSelectChain = Option<sc_consensus::LongestChain<FullBackend, Block>>;
 
 // Native executor instance.
@@ -432,7 +434,24 @@ pub async fn start_node(
     .await
 }
 
-pub fn new_dev(config: Configuration, _author_id: Option<nimbus_primitives::NimbusId>) -> Result<TaskManager, sc_service::Error> {
+pub fn new_dev<RuntimeApi, Executor>(config: Configuration, _author_id: Option<nimbus_primitives::NimbusId>) -> Result<TaskManager, sc_service::Error> 
+where
+	RuntimeApi:
+		ConstructRuntimeApi<Block, FullClient<RuntimeApi, Executor>> + Send + Sync + 'static,
+    RuntimeApi::RuntimeApi: sp_mvm_rpc_runtime::MVMApiRuntime<Block, AccountId>,
+    RuntimeApi::RuntimeApi:
+        pallet_transaction_payment_rpc::TransactionPaymentRuntimeApi<Block, Balance>,
+    RuntimeApi::RuntimeApi: substrate_frame_rpc_system::AccountNonceApi<Block, AccountId, Index>,
+    RuntimeApi::RuntimeApi: sp_transaction_pool::runtime_api::TaggedTransactionQueue<Block>
+        + sp_api::Metadata<Block>
+        + sp_session::SessionKeys<Block>
+        + sp_api::ApiExt<
+            Block,
+            StateBackend = sc_client_api::StateBackendFor<TFullBackend<Block>, Block>,
+        > + sp_offchain::OffchainWorkerApi<Block>
+        + sp_block_builder::BlockBuilder<Block>,
+	Executor: NativeExecutionDispatch + 'static
+{
     use async_io::Timer;
     use futures::Stream;
     let sc_service::PartialComponents {
@@ -444,7 +463,7 @@ pub fn new_dev(config: Configuration, _author_id: Option<nimbus_primitives::Nimb
         select_chain: maybe_select_chain,
         transaction_pool,
         other: (maybe_telemetry, maybe_telemetry_handler),
-    } = new_partial(&config, true)?;
+    } = new_partial::<RuntimeApi, Executor>(&config, true)?;
 
     let (network, system_rpc_tx, network_starter) =
         sc_service::build_network(sc_service::BuildNetworkParams {
@@ -469,7 +488,6 @@ pub fn new_dev(config: Configuration, _author_id: Option<nimbus_primitives::Nimb
     let prometheus_registry = config.prometheus_registry().cloned();
     let subscription_task_executor =
         sc_rpc::SubscriptionTaskExecutor::new(task_manager.spawn_handle());
-    let mut command_sink = None;
     let collator = config.role.is_authority();
 
     if collator {
@@ -516,10 +534,10 @@ pub fn new_dev(config: Configuration, _author_id: Option<nimbus_primitives::Nimb
         task_manager.spawn_essential_handle().spawn_blocking(
             "authorship_task",
             run_manual_seal(ManualSealParams {
-                block_import: import_queue,
+                block_import: client.clone(),
                 env,
                 client: client.clone(),
-                pool: transaction_pool.clone(),
+                pool: transaction_pool.pool().clone(),
                 commands_stream,
                 select_chain,
                 consensus_data_provider: None,
