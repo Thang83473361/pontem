@@ -129,11 +129,10 @@ macro_rules! construct_async_run {
 		runner.async_run(|$config| {
 			let $components = new_partial::<
 				RuntimeApi,
-				ParachainRuntimeExecutor,
-				_
+				ParachainRuntimeExecutor
 			>(
 				&$config,
-				crate::service::parachain_build_import_queue,
+				false,
 			)?;
 			let task_manager = $components.task_manager;
 			{ $( $code )* }.map(|v| (v, task_manager))
@@ -259,10 +258,14 @@ pub fn run() -> sc_cli::Result<()> {
             runner.run_node_until_exit(|config| async move {
                 let is_dev_mode = false;
                 if is_dev_mode {
-                    let author_id = Some(chain_spec::get_from_seed::<nimbus_primitives::NimbusId>("Alice"));
-                    return service::new_dev(config, author_id, cli.run.sealing, rpc_config).map_err(Into::into);
+                    let author_id = Some(
+                        chain_spec::get_from_seed::<nimbus_primitives::NimbusId>("Alice"),
+                    );
+                    return service::new_dev::<RuntimeApi, ParachainRuntimeExecutor>(
+                        config, author_id,
+                    )
+                    .map_err(Into::into);
                 }
-
 
                 let para_id =
                     chain_spec::Extensions::try_get(&*config.chain_spec).map(|e| e.para_id);

@@ -7350,7 +7350,6 @@ dependencies = [
 name = "pontem-node"
 version = "0.4.1"
 dependencies = [
- "async-io",
  "cumulus-client-cli",
  "cumulus-client-consensus-common",
  "cumulus-client-consensus-relay-chain",

@@ -434,10 +434,13 @@ pub async fn start_node(
     .await
 }
 
-pub fn new_dev<RuntimeApi, Executor>(config: Configuration, _author_id: Option<nimbus_primitives::NimbusId>) -> Result<TaskManager, sc_service::Error> 
+pub fn new_dev<RuntimeApi, Executor>(
+    config: Configuration,
+    _author_id: Option<nimbus_primitives::NimbusId>,
+) -> Result<TaskManager, sc_service::Error>
 where
-	RuntimeApi:
-		ConstructRuntimeApi<Block, FullClient<RuntimeApi, Executor>> + Send + Sync + 'static,
+    RuntimeApi:
+        ConstructRuntimeApi<Block, FullClient<RuntimeApi, Executor>> + Send + Sync + 'static,
     RuntimeApi::RuntimeApi: sp_mvm_rpc_runtime::MVMApiRuntime<Block, AccountId>,
     RuntimeApi::RuntimeApi:
         pallet_transaction_payment_rpc::TransactionPaymentRuntimeApi<Block, Balance>,
@@ -450,22 +453,20 @@ where
             StateBackend = sc_client_api::StateBackendFor<TFullBackend<Block>, Block>,
         > + sp_offchain::OffchainWorkerApi<Block>
         + sp_block_builder::BlockBuilder<Block>,
-	Executor: NativeExecutionDispatch + 'static
+    Executor: NativeExecutionDispatch + 'static,
 {
-    use async_io::Timer;
     use futures::Stream;
     let sc_service::PartialComponents {
         client,
-        backend,
-        mut task_manager,
+        task_manager,
         import_queue,
-        keystore_container,
         select_chain: maybe_select_chain,
         transaction_pool,
-        other: (maybe_telemetry, maybe_telemetry_handler),
+        other: (maybe_telemetry, _maybe_telemetry_handle),
+        ..
     } = new_partial::<RuntimeApi, Executor>(&config, true)?;
 
-    let (network, system_rpc_tx, network_starter) =
+    let (network, _system_rpc_tx, network_starter) =
         sc_service::build_network(sc_service::BuildNetworkParams {
             config: &config,
             client: client.clone(),
@@ -486,8 +487,6 @@ where
     }
 
     let prometheus_registry = config.prometheus_registry().cloned();
-    let subscription_task_executor =
-        sc_rpc::SubscriptionTaskExecutor::new(task_manager.spawn_handle());
     let collator = config.role.is_authority();
 
     if collator {
